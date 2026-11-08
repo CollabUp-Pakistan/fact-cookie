@@ -1,0 +1,16 @@
+.git
+.venv
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.env
+**/.env.*
+!**/.env.example
+*.db
+*.db-shm
+*.db-wal
+**/data/uploads
+**/logs
+**/node_modules
+.DS_Store

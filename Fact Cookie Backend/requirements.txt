@@ -1,0 +1,25 @@
+# Pinned runtime dependencies. The Agents SDK is installed from the local folder
+# in editable mode (see README): pip install -e "../openai-agents-python"
+fastapi==0.162.2
+uvicorn[standard]==0.54.0
+pydantic==2.14.3
+pydantic-settings==2.16.2
+python-multipart==0.0.33
+sqlalchemy[asyncio]==2.1.8
+alembic==1.20.1
+aiosqlite==0.22.1
+asyncpg==0.32.0
+argon2-cffi==25.1.0
+pyjwt==2.15.1
+httpx==0.28.1
+tavily-python==0.8.5
+trafilatura==2.3.1
+beautifulsoup4==4.15.0
+pymupdf==2.1
+fastmcp==4.1.6
+email-validator==2.3.0
+python-dotenv==1.2.4
+
+# Dev / test
+pytest==9.2.0
+pytest-asyncio==1.4.1.post1
