@@ -26,7 +26,7 @@ services:
       - key: FRONTEND_URL
         sync: false
       - key: CORS_ORIGINS
-        sync: false
+        value: '["*"]'
       - key: LLM_MODE
         value: mock
       - key: OPENROUTER_API_KEY
