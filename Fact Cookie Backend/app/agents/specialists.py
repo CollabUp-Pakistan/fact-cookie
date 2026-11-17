@@ -58,7 +58,13 @@ def build_agents() -> dict[str, Agent]:
             "Use the specialist agents as tools. Enforce the evidence rule: unverifiable unless real evidence exists."
         ),
         model=get_model("strong"),
-        tools=[extractor.as_tool(name="extract_claims", description="Extract checkable claims"), researcher.as_tool(name="research_evidence", description="Find evidence for claims"), verifier.as_tool(name="verify_claim", description="Verify one claim"), rewriter.as_tool(name="rewrite_answer", description="Rewrite answer with citations"), save_verification],
+        tools=[
+            extractor.as_tool(tool_name="extract_claims", tool_description="Extract checkable claims"),
+            researcher.as_tool(tool_name="research_evidence", tool_description="Find evidence for claims"),
+            verifier.as_tool(tool_name="verify_claim", tool_description="Verify one claim"),
+            rewriter.as_tool(tool_name="rewrite_answer", tool_description="Rewrite answer with citations"),
+            save_verification,
+        ],
         output_type=VerificationResult,
     )
 
