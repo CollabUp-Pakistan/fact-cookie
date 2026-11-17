@@ -48,6 +48,109 @@ async def test_oauth_discovery_and_dynamic_registration(client: AsyncClient):
     assert reg.json()["client_id"].startswith("mcp_")
 
 
+async def test_authorize_context(client: AsyncClient):
+    reg = await client.post(
+        "/oauth/register",
+        json={
+            "client_name": "Context Client",
+            "redirect_uris": ["http://localhost:3000/callback"],
+            "token_endpoint_auth_method": "none",
+        },
+    )
+    client_id = reg.json()["client_id"]
+
+    ctx = await client.get(
+        "/oauth/authorize/context",
+        params={
+            "client_id": client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "response_type": "code",
+            "scope": "factcookie:verify",
+        },
+    )
+    assert ctx.status_code == 200, ctx.text
+    body = ctx.json()
+    assert body["client_name"] == "Context Client"
+    assert body["scopes"] == ["factcookie:verify"]
+
+    # Unknown client and unregistered redirect must fail.
+    missing = await client.get(
+        "/oauth/authorize/context",
+        params={"client_id": "mcp_does_not_exist", "redirect_uri": "http://localhost:3000/callback"},
+    )
+    assert missing.status_code == 404, missing.text
+    bad_redirect = await client.get(
+        "/oauth/authorize/context",
+        params={"client_id": client_id, "redirect_uri": "https://evil.example/callback"},
+    )
+    assert bad_redirect.status_code == 400, bad_redirect.text
+
+
+async def test_consent_allow_and_deny(client: AsyncClient):
+    tokens = await _register_user(client)
+    user_headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    client_reg = await client.post(
+        "/oauth/register",
+        json={
+            "client_name": "Consent Client",
+            "redirect_uris": ["http://localhost:3000/callback"],
+            "token_endpoint_auth_method": "none",
+        },
+    )
+    client_id = client_reg.json()["client_id"]
+    base = {"client_id": client_id, "redirect_uri": "http://localhost:3000/callback", "response_type": "code"}
+
+    deny = await client.post(
+        "/oauth/authorize/consent",
+        json={**base, "state": "s-deny", "decision": "deny"},
+        headers=user_headers,
+    )
+    assert deny.status_code == 200, deny.text
+    deny_url = deny.json()["redirect_url"]
+    assert deny_url.startswith("http://localhost:3000/callback?")
+    assert parse_qs(urlparse(deny_url).query)["error"] == ["access_denied"]
+    assert parse_qs(urlparse(deny_url).query)["state"] == ["s-deny"]
+
+    verifier = "consent-verifier-456"
+    challenge = create_pkce_challenge(verifier)
+    allow = await client.post(
+        "/oauth/authorize/consent",
+        json={
+            **base,
+            "state": "s-allow",
+            "scope": "factcookie:verify",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "decision": "allow",
+        },
+        headers=user_headers,
+    )
+    assert allow.status_code == 200, allow.text
+    allow_url = allow.json()["redirect_url"]
+    query = parse_qs(urlparse(allow_url).query)
+    assert query["state"] == ["s-allow"]
+    code = query["code"][0]
+
+    # The consent-issued code must exchange for real MCP tokens.
+    token = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": "http://localhost:3000/callback",
+            "client_id": client_id,
+            "code_verifier": verifier,
+        },
+    )
+    assert token.status_code == 200, token.text
+    assert token.json()["token_type"] == "Bearer"
+
+    # Without login the consent endpoint must reject.
+    anon = await client.post("/oauth/authorize/consent", json={**base, "decision": "allow"})
+    assert anon.status_code == 401, anon.text
+
+
 async def test_authorization_code_pkce_refresh_and_revoke(client: AsyncClient):
     tokens = await _register_user(client)
     user_headers = {"Authorization": f"Bearer {tokens['access_token']}"}

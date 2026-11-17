@@ -1,0 +1,25 @@
+# FastAPI Cloud upload rules (takes precedence over .gitignore).
+# Deploy target: repo root, application directory "Fact Cookie Backend".
+
+# Never upload local secrets (env.env is untracked, so .gitignore does not cover it)
+env.env
+.env
+.env.*
+!.env.example
+
+# The Agents SDK is installed from PyPI (openai-agents==0.24.0) for cloud builds
+openai-agents-python/
+
+# Local-only artifacts
+.deploy-venv/
+Fact Cookie Backend/.venv/
+
+# Not needed at runtime
+Fact Cookie Backend/tests/
+Fact Cookie Backend/docs/
+Fact Cookie Backend/scripts/
+BACKEND_PROMPT.md
+MCP_Skill.md
+Dockerfile
+render.yaml
+.dockerignore

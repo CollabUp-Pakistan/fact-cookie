@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -135,6 +135,63 @@ async def authorize_get(
     return HTMLResponse(_login_page(login_url))
 
 
+@router.get("/oauth/authorize/context")
+async def authorize_context(
+    client_id: str = Query(...),
+    redirect_uri: str = Query(...),
+    response_type: str = Query("code"),
+    scope: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Public pre-consent info for the frontend consent screen (client name + granted scopes)."""
+    client = await _get_client(db, client_id)
+    _validate_authorize_request(client, redirect_uri, response_type)
+    scopes = _parse_scopes(scope)
+    return {"client_name": client.client_name, "scopes": scopes, "scope": " ".join(scopes)}
+
+
+class ConsentDecision(BaseModel):
+    """Body of the frontend consent screen: OAuth params plus the user's decision."""
+
+    client_id: str
+    redirect_uri: str
+    response_type: str = "code"
+    scope: str | None = None
+    state: str | None = None
+    code_challenge: str | None = None
+    code_challenge_method: str | None = None
+    resource: str | None = None
+    decision: Literal["allow", "deny"]
+
+
+@router.post("/oauth/authorize/consent")
+async def authorize_consent(
+    body: ConsentDecision,
+    user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Signed-in user allows or denies the connection. Returns the URL to send the browser to."""
+    client = await _get_client(db, body.client_id)
+    _validate_authorize_request(client, body.redirect_uri, body.response_type)
+    params: dict[str, str] = {}
+    if body.state:
+        params["state"] = body.state
+    if body.decision == "deny":
+        params["error"] = "access_denied"
+        return {"redirect_url": f"{body.redirect_uri}?{urlencode(params)}"}
+    code = await _create_auth_code(
+        db,
+        user,
+        client,
+        redirect_uri=body.redirect_uri,
+        scope=body.scope,
+        code_challenge=body.code_challenge,
+        code_challenge_method=body.code_challenge_method,
+    )
+    params["code"] = code
+    return {"redirect_url": f"{body.redirect_uri}?{urlencode(params)}"}
+
+
 @router.post("/oauth/authorize")
 async def authorize_post(
     request: Request,
@@ -150,7 +207,28 @@ async def authorize_post(
 ) -> RedirectResponse:
     client = await _get_client(db, client_id)
     _validate_authorize_request(client, redirect_uri, response_type)
-    scopes = _parse_scopes(scope)
+    code = await _create_auth_code(
+        db, user, client,
+        redirect_uri=redirect_uri, scope=scope,
+        code_challenge=code_challenge, code_challenge_method=code_challenge_method,
+    )
+    params = {"code": code}
+    if state:
+        params["state"] = state
+    return RedirectResponse(f"{redirect_uri}?{urlencode(params)}", status_code=302)
+
+
+async def _create_auth_code(
+    db: AsyncSession,
+    user: User,
+    client: OAuthClient,
+    *,
+    redirect_uri: str,
+    scope: str | None,
+    code_challenge: str | None,
+    code_challenge_method: str | None,
+) -> str:
+    """Issue a single-use authorization code for this user + client (PKCE-aware)."""
     code = new_opaque_token(32)
     db.add(
         OAuthAuthCode(
@@ -158,17 +236,14 @@ async def authorize_post(
             client_id=client.client_id,
             user_id=str(user.id),
             redirect_uri=redirect_uri,
-            scopes=scopes,
+            scopes=_parse_scopes(scope),
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
             expires_at=_utcnow() + timedelta(seconds=settings.oauth_auth_code_ttl_seconds),
         )
     )
     await db.commit()
-    params = {"code": code}
-    if state:
-        params["state"] = state
-    return RedirectResponse(f"{redirect_uri}?{urlencode(params)}", status_code=302)
+    return code
 
 
 @router.post("/oauth/token")

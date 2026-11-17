@@ -1,6 +1,9 @@
-# Pinned runtime dependencies. The Agents SDK is installed from the local folder
-# in editable mode (see README): pip install -e "../openai-agents-python"
-fastapi==0.162.2
+# Pinned runtime dependencies. The Agents SDK comes from PyPI (version matches
+# the vendored ../openai-agents-python copy). For local development you can still
+# install it in editable mode: pip install -e "../openai-agents-python"
+# fastapi[standard] is required by FastAPI Cloud builds.
+fastapi[standard]==0.162.2
+openai-agents==0.24.0
 uvicorn[standard]==0.54.0
 pydantic==2.14.3
 pydantic-settings==2.16.2
