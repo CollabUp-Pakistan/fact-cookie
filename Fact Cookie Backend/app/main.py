@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs_router, prefix=settings.api_v1_prefix)
     app.include_router(insights_router, prefix=settings.api_v1_prefix)
     app.include_router(oauth_router)
-    app.mount("/mcp", mcp_app)
+    app.mount("/mcp/", mcp_app)
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:
