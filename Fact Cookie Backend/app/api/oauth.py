@@ -43,7 +43,7 @@ def _issuer() -> str:
 
 
 def _resource() -> str:
-    return f"{_issuer()}/mcp"
+    return f"{_issuer()}/mcp/"
 
 
 @router.get("/.well-known/oauth-authorization-server")
